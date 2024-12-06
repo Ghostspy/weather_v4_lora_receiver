@@ -440,7 +440,7 @@ void eSensors(void) {
 
   y += yOffset;
 #ifdef IMPERIAL
-  // Convert mbar to inHg
+  // Convert mbar to US inHg
   float pressureInHg = (environment.barometricPressure / 100) * 0.02953;
   display.setCursor(xS, y);
   display.print("inHg:");
@@ -509,7 +509,6 @@ void eHardware(void) {
   display.print(vBat);
 
   y += yOffset;
-
 #ifdef IMPERIAL // Display in US
   // Display temperature in Fahrenheit
   float bmetempF = (hardware.BMEtemperature * 9.0 / 5.0) + 32;

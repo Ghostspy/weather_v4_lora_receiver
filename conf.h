@@ -21,11 +21,11 @@ char pass[] = "littleorangemen";  // WiFi Router password
 //===========================================
 //MQTT broker connection
 //===========================================
-// const char* mqttServer = "91.121.93.94";  //test.mosquitto.org
-const char* mqttServer = "192.168.1.179";
+const char* mqttServer = "91.121.93.94";  //test.mosquitto.org
+// const char* mqttServer = "192.168.1.179";
 const int mqttPort = 1883;
-const char* mqttUser = "ghost";
-const char* mqttPassword = "L0g!tech";
+const char* mqttUser = "mqttUser";
+const char* mqttPassword = "mqttPassword";
 const char mainTopic[20] = "PriorLake/";
 #define RETAIN false
 
@@ -58,5 +58,10 @@ const int daylightOffset_sec = 3600;
 //===========================================
 //#define DEV_HELTEC_RECEIVER
 #define E_PAPER
+
+//===========================================
+//Chad Bittner added to display US Temp and Pressure
+//Also allows use of the Waveshare 4.2" Rev 2.2
+//===========================================
 #define IMPERIAL
 #define WAVESHARE_R22

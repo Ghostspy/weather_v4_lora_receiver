@@ -30,6 +30,9 @@
 
    1.2.2 09-09-23 Correctly calculate inHg
                   Hearbeat tweaks '.' on Serial port
+
+  1.2.3 12-06-24 Added support for Waveshare 4.2" e-Paper Rev 2.2
+                 Added displaying values in Farhenheit and inHg
 */
 
 //Hardware build target: ESP32

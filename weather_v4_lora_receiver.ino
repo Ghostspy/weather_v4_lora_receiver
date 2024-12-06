@@ -33,18 +33,12 @@
 */
 
 //Hardware build target: ESP32
-#define VERSION "1.2.2"
-
+#define VERSION "1.2.3"
 
 //#include "heltec.h"
+#include "conf.h"
 #include <LoRa.h>
 #include <spi.h>
-
-#include <GxEPD.h>
-#include <GxGDEW042T2/GxGDEW042T2.h>  // 4.2" b/w
-#include <GxIO/GxIO_SPI/GxIO_SPI.h>
-#include <GxIO/GxIO.h>
-
 
 
 // e-paper pins mapping
@@ -53,8 +47,26 @@
 #define DISP_RST 26
 #define BUSY 25
 
+#ifdef WAVESHARE_R22
+// GxEPD2 - Required for Waveshare 4.2" Rev. 2.2
+#include <GxEPD2_BW.h> // For black-and-white displays
+#include <SPI.h>
+
+// Define the driver class for your specific e-paper model
+#define GxEPD2_DRIVER_CLASS GxEPD2_420_GDEY042T81
+
+// Declare the display object using the driver class
+GxEPD2_BW<GxEPD2_DRIVER_CLASS, GxEPD2_DRIVER_CLASS::HEIGHT> display(GxEPD2_DRIVER_CLASS(CS, DC, DISP_RST, BUSY));
+#else
+// // GxEPD
+#include <GxEPD.h>
+#include <GxGDEW042T2/GxGDEW042T2.h> // 4.2" b/w
+#include <GxIO/GxIO_SPI/GxIO_SPI.h>
+#include <GxIO/GxIO.h>
+
 GxIO_Class io(SPI, CS, DC, DISP_RST);
 GxEPD_Class display(io, DISP_RST, BUSY);
+#endif
 
 #include "config.h"
 #include <WiFi.h>
@@ -186,7 +198,8 @@ void setup() {
 #ifdef E_PAPER
   // Initialize the display
   display.init();
-  display.setRotation(0);             // Set the rotation if needed (0, 1, 2, or 3)
+  Serial.println("Display initialized");  
+  display.setRotation(2);             // Set the rotation if needed (0, 1, 2, or 3)
   display.setTextColor(GxEPD_BLACK);  // Set the text color to black
   eTitle();
 #endif
@@ -240,8 +253,27 @@ void loop() {
     MonPrintf(".");
     upTimeSeconds = millis() / 60000;
 
-
 #ifdef E_PAPER
+  #ifdef WAVESHARE_R22
+    // GxEPD2 - Required for Waveshare 4.2" Rev. 2.2
+    if (firstUpdate || millis() % 60000 < 500) {
+        // Start the display update
+        display.firstPage();
+        do {
+            // Clear the screen
+            display.fillScreen(GxEPD_WHITE);
+
+            // Call functions to draw your content
+            eUpdate(count, Hcount, Scount, Xcount, upTimeSeconds);
+            eSensors();
+            eHardware();
+        } while (display.nextPage()); // Continue to the next part of the display update
+
+        // Ensure `firstUpdate` is set to false after the initial update
+        firstUpdate = false;
+    }    
+  #else
+    // GxEPD
     if (firstUpdate | millis() % 60000 < 500) {
       display.fillScreen(GxEPD_WHITE);
       eUpdate(count, Hcount, Scount, Xcount, upTimeSeconds);
@@ -249,6 +281,7 @@ void loop() {
       eHardware();
       display.update();
     }
+  #endif  
 #endif
     firstUpdate = false;
   }
@@ -310,6 +343,28 @@ void MonPrintf(const char* format, ...) {
 #endif
 }
 
+#ifdef WAVESHARE_R22
+// GxEPD2
+void eTitle() {
+  // Start the display update
+  display.firstPage();
+  do {
+    // Set the text size and cursor position
+    display.setTextSize(2);
+    display.setCursor(20, 20);
+    display.print(" Weather Station V4.0 ");
+
+    display.setCursor(60, 180);
+    display.print("Debasish Dutta");
+    display.setCursor(60, 210);
+    display.println("James Hughes 2023");
+    display.setCursor(60, 230);
+    display.print("Ver: ");
+    display.println(VERSION);
+  } while (display.nextPage()); // Complete the display update
+}
+#else
+// GxEPD
 void eTitle(void) {
 
   // Set the text size and cursor position
@@ -329,11 +384,11 @@ void eTitle(void) {
   display.update();
   delay(2000);
 }
+#endif
 
 void eUpdate(int count, int hardware, int sensor, int ignore, int upTimeSeconds) {
   int xStart, yStart;
   //int x, xOffset;
-
 
   display.setCursor(5, 281);
   display.setTextSize(2);
@@ -361,20 +416,40 @@ void eSensors(void) {
   display.setCursor(xS, yS);
   display.print("Sensors:");
   //display.update();
+
   y += yOffset;
+#ifdef IMPERIAL // Display in US
+  // Display temperature in Fahrenheit
+  float tempF = (environment.temperatureC * 9.0 / 5.0) + 32;
   display.setCursor(xS, y);
-  display.print("TempC:");
+  display.print("Temp:");
+  display.print(tempF);
+  display.print("F");
+#else // display in Metric
+  display.setCursor(xS, y);
+  display.print("Temp:");
   display.print(environment.temperatureC);
+  display.print("C");
+#endif
 
   y += yOffset;
   display.setCursor(xS, y);
   display.print("Rel Hum:");
   display.print(environment.humidity);
+  display.print("%");
 
   y += yOffset;
+#ifdef IMPERIAL
+  // Convert mbar to inHg
+  float pressureInHg = (environment.barometricPressure / 100) * 0.02953;
+  display.setCursor(xS, y);
+  display.print("inHg:");
+  display.print(pressureInHg, 2); // Display with 2 decimal places
+#else
   display.setCursor(xS, y);
   display.print("mbar:");
   display.print(environment.barometricPressure / 100);
+#endif
 
   y += yOffset;
   display.setCursor(xS, y);
@@ -434,7 +509,19 @@ void eHardware(void) {
   display.print(vBat);
 
   y += yOffset;
+
+#ifdef IMPERIAL // Display in US
+  // Display temperature in Fahrenheit
+  float bmetempF = (hardware.BMEtemperature * 9.0 / 5.0) + 32;
+  display.setCursor(xS, y);
+  display.print("BME Temp:");
+  display.print(bmetempF);
+    display.print("F");
+#else // display in Metric
   display.setCursor(xS, y);
   display.print("BME Temp:");
   display.print(hardware.BMEtemperature);
+    display.print("C");
+#endif
+
 }

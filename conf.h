@@ -15,18 +15,18 @@
 //===========================================
 //WiFi connection
 //===========================================
-char ssid[] = "ssid";      // WiFi Router ssid
-char pass[] = "password";  // WiFi Router password
+char ssid[] = "gh-iot";      // WiFi Router ssid
+char pass[] = "littleorangemen";  // WiFi Router password
 
 //===========================================
 //MQTT broker connection
 //===========================================
-const char* mqttServer = "91.121.93.94";  //test.mosquitto.org
-//const char* mqttServer = "192.168.5.66";
+// const char* mqttServer = "91.121.93.94";  //test.mosquitto.org
+const char* mqttServer = "192.168.1.179";
 const int mqttPort = 1883;
-const char* mqttUser = "";
-const char* mqttPassword = "";
-const char mainTopic[20] = "RoyalGorge/";
+const char* mqttUser = "ghost";
+const char* mqttPassword = "L0g!tech";
+const char mainTopic[20] = "PriorLake/";
 #define RETAIN false
 
 //===========================================
@@ -57,4 +57,6 @@ const int daylightOffset_sec = 3600;
 //James Hughes is using a Heltec_LoRa_v2 for receiver
 //===========================================
 //#define DEV_HELTEC_RECEIVER
-//#define E_PAPER
+#define E_PAPER
+#define IMPERIAL
+#define WAVESHARE_R22

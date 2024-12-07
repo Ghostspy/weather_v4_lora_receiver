@@ -21,11 +21,11 @@ char pass[] = "littleorangemen";  // WiFi Router password
 //===========================================
 //MQTT broker connection
 //===========================================
-const char* mqttServer = "91.121.93.94";  //test.mosquitto.org
-// const char* mqttServer = "192.168.1.179";
+// const char* mqttServer = "91.121.93.94";  //test.mosquitto.org
+const char* mqttServer = "192.168.1.179";
 const int mqttPort = 1883;
-const char* mqttUser = "mqttUser";
-const char* mqttPassword = "mqttPassword";
+const char* mqttUser = "ghost";
+const char* mqttPassword = "L0g!tech";
 const char mainTopic[20] = "PriorLake/";
 #define RETAIN false
 

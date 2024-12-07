@@ -61,7 +61,7 @@
 // Declare the display object using the driver class
 GxEPD2_BW<GxEPD2_DRIVER_CLASS, GxEPD2_DRIVER_CLASS::HEIGHT> display(GxEPD2_DRIVER_CLASS(CS, DC, DISP_RST, BUSY));
 #else
-// // GxEPD
+// GxEPD
 #include <GxEPD.h>
 #include <GxGDEW042T2/GxGDEW042T2.h> // 4.2" b/w
 #include <GxIO/GxIO_SPI/GxIO_SPI.h>
@@ -267,7 +267,7 @@ void loop() {
             display.fillScreen(GxEPD_WHITE);
 
             // Call functions to draw your content
-            eUpdate(count, Hcount, Scount, Xcount, upTimeSeconds);
+            // eUpdate(count, Hcount, Scount, Xcount, upTimeSeconds);
             eSensors();
             eHardware();
         } while (display.nextPage()); // Continue to the next part of the display update
@@ -313,7 +313,7 @@ void PrintEnvironment(struct sensorData environment) {
   MonPrintf("Rain Ticks 60m: %i\n", environment.rainTicks60m);
   MonPrintf("Temperature: %f\n", environment.temperatureC);
   MonPrintf("Wind speed: %f\n", environment.windSpeed);
-  //TODO:  Serial.printf("Wind direction: %f\n", environment.windDirection);
+  // TODO Serial.printf("Wind direction: %f\n", environment.windDirection);
   MonPrintf("barometer: %f\n", environment.barometricPressure);
   MonPrintf("Humidity: %f\n", environment.humidity);
   MonPrintf("UV Index: %f\n", environment.UVIndex);
@@ -456,19 +456,32 @@ void eSensors(void) {
 
   y += yOffset;
   display.setCursor(xS, y);
-  display.print("Dir:");
-  display.print(environment.windDirectionADC);
-  display.print(" sp:");
-  display.print(environment.windSpeedMax);
+  display.print("Wind:");
 
   y += yOffset;
   display.setCursor(xS, y);
-  display.print("Rn 1h:");
+  display.print(" Direction:");
+  // display.print(environment.windDirectionADC);
+  display.print(wind.cardinalDirection);
+  
+    y += yOffset;
+  display.setCursor(xS, y);
+  display.print(" Speed:");
+  // display.print(environment.windSpeedMax);
+  display.print(environment.windSpeed);
+
+  y += yOffset;
+  display.setCursor(xS, y);
+  display.print("Rain:");
+
+  y += yOffset;
+  display.setCursor(xS, y);
+  display.print("  1h:");
   display.print(environment.rainTicks60m);
 
   y += yOffset;
   display.setCursor(xS, y);
-  display.print("Rn 24h:");
+  display.print(" 24h:");
   display.print(environment.rainTicks24h);
 
   y += yOffset;

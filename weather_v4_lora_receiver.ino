@@ -419,7 +419,7 @@ void eTitle(void) {
 }
 #endif
 
-void eUpdate(int count, int hardware, int sensor, int ignore, int upTimeSeconds) {
+void eUpdate(int count, int hardware, int sensor, int ignore, unsigned long upTimeSeconds) {
   int xStart, yStart;
   //int x, xOffset;
 

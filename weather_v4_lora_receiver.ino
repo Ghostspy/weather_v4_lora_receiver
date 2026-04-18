@@ -257,7 +257,7 @@ void loop() {
   static bool firstUpdate = true;
   esp_task_wdt_reset();
   static int count = 0, Scount = 0, Hcount = 0, Xcount = 0;
-  int upTimeSeconds = 0;
+  unsigned long upTimeSeconds = 0;
   int packetSize = LoRa.parsePacket();
 
   environment.deviceID = 0;
@@ -290,9 +290,13 @@ void loop() {
 #endif
   }
   delay(10);
-  if (firstUpdate || millis() % 10000 < 5) {
+  static unsigned long lastHeartbeatMs = 0;
+  static unsigned long lastDisplayMs   = 0;
+
+  if (firstUpdate || millis() - lastHeartbeatMs >= 10000) {
+    lastHeartbeatMs = millis();
     MonPrintf(".");
-    upTimeSeconds = millis() / 60000;
+    upTimeSeconds = millis() / 1000;
 
 #ifdef RECEIVER_BME280
     if (receiverBMEok) {
@@ -304,29 +308,25 @@ void loop() {
 #endif
 
 #ifdef E_PAPER
+    if (firstUpdate || millis() - lastDisplayMs >= 60000) {
+      lastDisplayMs = millis();
   #ifdef WAVESHARE_R22
-    // GxEPD2 - Required for Waveshare 4.2" Rev. 2.2
-    if (firstUpdate || millis() % 60000 < 500) {
-        display.firstPage();
-        do {
-            display.fillScreen(GxEPD_WHITE);
-            eSensors();
-            eHardware();
-            esp_task_wdt_reset(); // e-paper full refresh can exceed 15s; reset WDT each page
-        } while (display.nextPage());
-        firstUpdate = false;
-    }
+      display.firstPage();
+      do {
+          display.fillScreen(GxEPD_WHITE);
+          eSensors();
+          eHardware();
+          esp_task_wdt_reset();
+      } while (display.nextPage());
   #else
-    // GxEPD
-    if (firstUpdate || millis() % 60000 < 500) {
       display.fillScreen(GxEPD_WHITE);
       eUpdate(count, Hcount, Scount, Xcount, upTimeSeconds);
       eSensors();
       eHardware();
       esp_task_wdt_reset();
       display.update();
+  #endif
     }
-  #endif  
 #endif
     firstUpdate = false;
   }

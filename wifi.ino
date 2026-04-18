@@ -1,5 +1,5 @@
 //=======================================================================
-//  wifi_connect: connect to WiFi. Replys on WDT to reset unit if no connection exists.
+//  wifi_connect: connect to WiFi. Returns 0 on 30-second timeout; returns RSSI on success.
 //=======================================================================
 long wifi_connect(void) {
   const unsigned long timeoutMs = 30000;

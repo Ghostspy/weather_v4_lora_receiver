@@ -453,7 +453,7 @@ void eSensors(void) {
   y += yOffset;
 #ifdef IMPERIAL // Display in US
   // Display temperature in Fahrenheit
-  float tempF = (environment.temperatureC * 9.0 / 5.0) + 32;
+  float tempF = (environment.temperatureC * 9.0f / 5.0f) + 32.0f;
   display.setCursor(xS, y);
   display.print("Temp:");
   display.print(tempF);
@@ -560,7 +560,7 @@ void eHardware(void) {
   y += yOffset;
 #ifdef IMPERIAL // Display in US
   // Display temperature in Fahrenheit
-  float bmetempF = (hardware.BMEtemperature * 9.0 / 5.0) + 32;
+  float bmetempF = (hardware.BMEtemperature * 9.0f / 5.0f) + 32.0f;
   display.setCursor(xS, y);
   display.print(" Temp:");
   display.print(bmetempF);
@@ -598,7 +598,7 @@ void eHardware(void) {
   if (receiverBMEok) {
     #ifdef IMPERIAL
       display.print(" Temp:");
-      display.print((receiverTempC * 9.0 / 5.0) + 32.0, 1);
+      display.print((receiverTempC * 9.0f / 5.0f) + 32.0f, 1);
       display.print("F");
     #else
       display.print(" Temp:");

@@ -28,7 +28,7 @@ void SendDataMQTT(struct sensorData environment) {
     }
   }
   temperatureF = environment.temperatureC * 9.0f / 5.0f + 32.0f;
-  windSpeedMPH = environment.windSpeed * 1 / 1.609;
+  windSpeedMPH = environment.windSpeed / 1.609f;
   windSpeedMaxMPH = environment.windSpeedMax / 1.609;
   // barometricPressure is in Pa (BME280 PresUnit_Pa). 1 Pa = 0.000295333 inHg.
   // OFFSET_IN/OFFSET_MM add altitude correction for sea-level pressure.
@@ -227,7 +227,7 @@ void SendReceiverBME280MQTT() {
     }
   }
 
-  float tempF  = (receiverTempC * 9.0 / 5.0) + 32.0;
+  float tempF  = (receiverTempC * 9.0f / 5.0f) + 32.0f;
   float inHg   = (receiverPressureHPa / 33.8639);
 
   MQTTPublish("receiver/temperature/C/",    receiverTempC,       RETAIN);

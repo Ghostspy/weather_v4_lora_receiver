@@ -14,7 +14,7 @@
 
 #define DEVID 0x11223344
 
-const char mainTopic[20] = "PriorLake/";
+const char mainTopic[] = "PriorLake/";
 #define RETAIN false
 
 //===========================================

@@ -169,8 +169,13 @@ void LoRaData() {
 // cbk: retreive contents of the received packet
 //===========================================
 void cbk(int packetSize) {
+  if (packetSize > (int)sizeof(packetBinary)) {
+    MonPrintf("Oversized packet (%d bytes) dropped\n", packetSize);
+    while (LoRa.available()) LoRa.read();
+    return;
+  }
   for (int i = 0; i < packetSize; i++) {
-    packetBinary[i] = (char)LoRa.read();
+    packetBinary[i] = (byte)LoRa.read();
   }
   rssi_lora = LoRa.packetRssi();
   if (packetSize == sizeof(environment)) {
@@ -246,8 +251,8 @@ void setup() {
 #endif
 
   //data structure stats
-  MonPrintf("Hardware size: %i\n", sizeof(hardware));
-  MonPrintf("Sensor size: %i\n", sizeof(environment));
+  MonPrintf("Hardware size: %zu\n", sizeof(hardware));
+  MonPrintf("Sensor size: %zu\n", sizeof(environment));
 }
 
 //===========================================
@@ -330,21 +335,6 @@ void loop() {
 #endif
     firstUpdate = false;
   }
-}
-
-//===========================================
-// HexDump: output hex data of the environment structure - going away
-//===========================================
-void HexDump(int size) {
-  //int size = 28;
-  int x;
-  char ch;
-  char* p = (char*)&environment;
-
-  for (x = 0; x < size; x++) {
-    Serial.printf("%02X ", p[x]);
-  }
-  Serial.println();
 }
 
 //===========================================

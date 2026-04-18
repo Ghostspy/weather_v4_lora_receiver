@@ -11,15 +11,10 @@ PubSubClient client(espClient);
 //=======================================================================
 
 void SendDataMQTT(struct sensorData environment) {
-  char bufferTempF[5];
-  char bufferTempC[5];
-  char bufferRain[10];
-  char bufferRain24[10];
   float temperatureF;
   float windSpeedMPH;
   float windSpeedMaxMPH;
   float inHg, mmHg;
-  float vBatttery, vSolar;
 
   client.setServer(mqttServer, mqttPort);
 
@@ -71,10 +66,6 @@ void SendDataMQTT(struct sensorData environment) {
 //  SendDataMQTT: send MQTT data to broker with 'retain' flag set to TRUE
 //=======================================================================
 void SendDataMQTT(struct diagnostics hardware) {
-  char bufferTempF[5];
-  char bufferTempC[5];
-  char bufferRain[10];
-  char bufferRain24[10];
   float vBattery, vSolar;
 
 

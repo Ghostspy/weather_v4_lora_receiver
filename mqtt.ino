@@ -21,26 +21,22 @@ void SendDataMQTT(struct sensorData environment) {
   float inHg, mmHg;
   float vBatttery, vSolar;
 
-  //int hourPtr = timeinfo.tm_hour;
   client.setServer(mqttServer, mqttPort);
-  //client.setCallback(callback);
 
-  while (!client.connected()) {
+  if (!client.connected()) {
     MonPrintf("Connecting to MQTT...");
-
     if (client.connect("ESP32Client", mqttUser, mqttPassword)) {
       Serial.println("connected");
     } else {
-      Serial.print("failed with state ");
-      Serial.print(client.state());
-      //delay(1000);
-      while (1)
-        ;
+      Serial.printf("MQTT connect failed, state %d - skipping publish\n", client.state());
+      return;
     }
   }
-  temperatureF = environment.temperatureC * 9 / 5 + 32;
+  temperatureF = environment.temperatureC * 9.0f / 5.0f + 32.0f;
   windSpeedMPH = environment.windSpeed * 1 / 1.609;
   windSpeedMaxMPH = environment.windSpeedMax / 1.609;
+  // barometricPressure is in Pa (BME280 PresUnit_Pa). 1 Pa = 0.000295333 inHg.
+  // OFFSET_IN/OFFSET_MM add altitude correction for sea-level pressure.
   inHg = environment.barometricPressure * 0.0002953 + OFFSET_IN;
   mmHg = environment.barometricPressure * 0.0002953 * 25.4 + OFFSET_MM;
   setWindDirection(environment.windDirectionADC);
@@ -82,21 +78,15 @@ void SendDataMQTT(struct diagnostics hardware) {
   float vBattery, vSolar;
 
 
-  //int hourPtr = timeinfo.tm_hour;
   client.setServer(mqttServer, mqttPort);
-  //client.setCallback(callback);
 
-  while (!client.connected()) {
+  if (!client.connected()) {
     MonPrintf("Connecting to MQTT...");
-
     if (client.connect("ESP32Client", mqttUser, mqttPassword)) {
       Serial.println("connected");
     } else {
-      Serial.print("failed with state ");
-      Serial.print(client.state());
-      while (1)
-        ;
-      //delay(1000);
+      Serial.printf("MQTT connect failed, state %d - skipping publish\n", client.state());
+      return;
     }
   }
 
@@ -123,15 +113,15 @@ void SendDataMQTT(struct diagnostics hardware) {
 //=======================================================================
 //  MQTTPublishString: routine to publish string
 //=======================================================================
-void MQTTPublish(const char topic[], char *value, bool retain) {
+void MQTTPublish(const char topic[], const char *value, bool retain) {
   char topicBuffer[256];
   char payload[256];
 
   strcpy(topicBuffer, mainTopic);
   strcat(topicBuffer, topic);
-  if (!client.connected()) reconnect();
+  if (!client.connected() && !reconnect()) return;
   client.loop();
-  sprintf(payload, "%s", value);
+  snprintf(payload, sizeof(payload), "%s", value);
   MQTTSend(topicBuffer, payload, retain);
 }
 
@@ -144,9 +134,9 @@ void MQTTPublish(const char topic[], int value, bool retain) {
 
   strcpy(topicBuffer, mainTopic);
   strcat(topicBuffer, topic);
-  if (!client.connected()) reconnect();
+  if (!client.connected() && !reconnect()) return;
   client.loop();
-  sprintf(payload, "%i", value);
+  snprintf(payload, sizeof(payload), "%i", value);
   MQTTSend(topicBuffer, payload, retain);
 }
 
@@ -160,9 +150,9 @@ void MQTTPublish(const char topic[], long value, bool retain) {
 
   strcpy(topicBuffer, mainTopic);
   strcat(topicBuffer, topic);
-  if (!client.connected()) reconnect();
+  if (!client.connected() && !reconnect()) return;
   client.loop();
-  sprintf(payload, "%li", value);
+  snprintf(payload, sizeof(payload), "%li", value);
   MQTTSend(topicBuffer, payload, retain);
 }
 
@@ -175,9 +165,9 @@ void MQTTPublish(const char topic[], float value, bool retain) {
 
   strcpy(topicBuffer, mainTopic);
   strcat(topicBuffer, topic);
-  if (!client.connected()) reconnect();
+  if (!client.connected() && !reconnect()) return;
   client.loop();
-  sprintf(payload, "%6.3f", value);
+  snprintf(payload, sizeof(payload), "%6.3f", value);
   MQTTSend(topicBuffer, payload, retain);
 }
 
@@ -190,35 +180,29 @@ void MQTTPublish(const char topic[], bool value, bool retain) {
 
   strcpy(topicBuffer, mainTopic);
   strcat(topicBuffer, topic);
-  if (!client.connected()) reconnect();
+  if (!client.connected() && !reconnect()) return;
   client.loop();
-  if (value) {
-    sprintf(payload, "true");
-  } else {
-    sprintf(payload, "false");
-  }
+  snprintf(payload, sizeof(payload), "%s", value ? "true" : "false");
   MQTTSend(topicBuffer, payload, retain);
 }
 
 //=======================================================================
-//  reconnect: MQTT reconnect
+//  reconnect: MQTT reconnect with credentials, limited retries
 //=======================================================================
-void reconnect() {
-  // Loop until we're reconnected
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Attempt to connect
-    if (client.connect("ESP32Client")) {
+bool reconnect() {
+  const int maxRetries = 3;
+  for (int i = 0; i < maxRetries && !client.connected(); i++) {
+    Serial.print("Attempting MQTT reconnect...");
+    if (client.connect("ESP32Client", mqttUser, mqttPassword)) {
       Serial.println("connected");
-
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
+      return true;
     }
+    Serial.printf("failed rc=%d (%d/%d)\n", client.state(), i + 1, maxRetries);
+    esp_task_wdt_reset();
+    delay(2000);
+    esp_task_wdt_reset();
   }
+  return client.connected();
 }
 
 //=======================================================================
@@ -239,3 +223,33 @@ void MQTTSend(char *topicBuffer, char *payload, bool retain) {
     retryCount++;
   }
 }
+
+#ifdef RECEIVER_BME280
+//=======================================================================
+//  SendReceiverBME280MQTT: publish receiver enclosure BME280 readings
+//=======================================================================
+void SendReceiverBME280MQTT() {
+  client.setServer(mqttServer, mqttPort);
+
+  if (!client.connected()) {
+    MonPrintf("Connecting to MQTT (receiver BME280)...\n");
+    if (client.connect("ESP32Client", mqttUser, mqttPassword)) {
+      Serial.println("connected");
+    } else {
+      Serial.printf("MQTT connect failed, state %d - skipping publish\n", client.state());
+      return;
+    }
+  }
+
+  float tempF  = (receiverTempC * 9.0 / 5.0) + 32.0;
+  float inHg   = (receiverPressureHPa / 33.8639);
+
+  MQTTPublish("receiver/temperature/C/",    receiverTempC,       RETAIN);
+  MQTTPublish("receiver/temperature/F/",    tempF,               RETAIN);
+  MQTTPublish("receiver/humidity/",         receiverHumidity,    RETAIN);
+  MQTTPublish("receiver/pressure/hPa/",     receiverPressureHPa, RETAIN);
+  MQTTPublish("receiver/pressure/inHg/",    inHg,                RETAIN);
+
+  client.disconnect();
+}
+#endif

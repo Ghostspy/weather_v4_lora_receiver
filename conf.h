@@ -1,5 +1,7 @@
 //rename to config.h
 
+#include "secrets.h"
+
 #define SerialMonitor
 
 #define SYNC 0x54
@@ -12,20 +14,6 @@
 
 #define DEVID 0x11223344
 
-//===========================================
-//WiFi connection
-//===========================================
-char ssid[] = "gh-iot";      // WiFi Router ssid
-char pass[] = "littleorangemen";  // WiFi Router password
-
-//===========================================
-//MQTT broker connection
-//===========================================
-// const char* mqttServer = "91.121.93.94";  //test.mosquitto.org
-const char* mqttServer = "192.168.1.179";
-const int mqttPort = 1883;
-const char* mqttUser = "ghost";
-const char* mqttPassword = "L0g!tech";
 const char mainTopic[20] = "PriorLake/";
 #define RETAIN false
 
@@ -65,3 +53,23 @@ const int daylightOffset_sec = 3600;
 //===========================================
 #define IMPERIAL
 #define WAVESHARE_R22
+
+//============================================
+//Chad Bittner added to display Recevier Battery Voltage
+//============================================
+#define BATTERY_PIN 34  // GPIO34 (D34)
+
+//============================================
+// Receiver BME280 (ambient/enclosure temp)
+// I2C header on receiver PCB: SDA=GPIO21, SCL=GPIO22
+// BME280 SDO pin: LOW=0x76, HIGH=0x77
+//============================================
+#define RECEIVER_BME280
+#define BME280_SDA  21
+#define BME280_SCL  22
+#define BME280_ADDR 0x76
+
+const float R1 = 100000.0;  // 100kΩ
+const float R2 = 100000.0;  // 100kΩ
+const float ADC_MAX = 4095.0;
+const float VOLTAGE_REF = 3.65;  // ESP32 ADC reference voltage

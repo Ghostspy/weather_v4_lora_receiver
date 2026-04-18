@@ -596,8 +596,8 @@ void eHardware(void) {
   display.setCursor(xS, y);
   display.print(" Battery:");
   int rawADC = analogRead(BATTERY_PIN);
-  float voltage = (rawADC / ADC_MAX) * VOLTAGE_REF;
-  float batteryVoltage = voltage / (R2 / (R1 + R2)); // Reverse voltage divider formula
+  float voltage = ((float)rawADC / ADC_MAX) * VOLTAGE_REF;
+  float batteryVoltage = voltage / (R2 / (R1 + R2));
   // float vBat = (float)hardware.batteryADC / ADCBattery;
   display.print(batteryVoltage);
   display.print("v");

@@ -31,18 +31,39 @@
    1.2.2 09-09-23 Correctly calculate inHg
                   Hearbeat tweaks '.' on Serial port
 
-  1.2.3 12-06-24 Added support for Waveshare 4.2" e-Paper Rev 2.2
-                 Added displaying values in Farhenheit and inHg
+   1.2.3 12-06-24 Added support for Waveshare 4.2" e-Paper Rev 2.2
+                  Added displaying values in Farhenheit and inHg
+                  Requires ESP32 Board Manager 2.0.12
+
+   1.3.0 04-17-26 ESP32 Arduino 3.x.x compatibility (ESP-IDF 5.x)
+                  esp_task_wdt_init -> esp_task_wdt_reconfigure (TWDT pre-initialized by framework)
+                  Moved SPI.h to top-level include, removed duplicate
+                  Removed stale 2.x.x WDT commented code
+                  Fixed bitwise OR bug in display update condition
+                  vsprintf/sprintf -> vsnprintf/snprintf (overflow safety)
+                  Replaced String heap allocations in wind.ino with const char*
+                  Removed unused rssi/packSize/packet/rssi_wifi globals
+
+   1.3.3 04-17-26 reconnect() was missing credentials (rc=5 UNAUTHORIZED) causing infinite retry loop
+                  reconnect() now limited to 3 attempts with esp_task_wdt_reset() between retries
+                  MQTTPublish overloads bail out early if reconnect fails
+
+   1.3.2 04-17-26 esp_task_wdt_reset() added inside e-paper do/while loop and eTitle()
+                  Waveshare 4.2" full refresh (~15-22s) was exceeding 30s WDT between loop() calls
+                  MQTT while(1) hang replaced with return on connect failure (prevents WDT reboot)
+
+   1.3.1 04-17-26 Receiver BME280 support (GPIO21 SDA / GPIO22 SCL)
+                  Reads temp, humidity, pressure every 10s; publishes to receiver/ MQTT topics
+                  Fills receiver enclosure temperature on e-paper display
 */
 
 //Hardware build target: ESP32
-#define VERSION "1.2.3"
+#define VERSION "1.3.3"
 
 //#include "heltec.h"
 #include "conf.h"
+#include <SPI.h>
 #include <LoRa.h>
-#include <spi.h>
-
 
 // e-paper pins mapping
 #define CS 5
@@ -52,8 +73,7 @@
 
 #ifdef WAVESHARE_R22
 // GxEPD2 - Required for Waveshare 4.2" Rev. 2.2
-#include <GxEPD2_BW.h> // For black-and-white displays
-#include <SPI.h>
+#include <GxEPD2_BW.h>
 
 // Define the driver class for your specific e-paper model
 #define GxEPD2_DRIVER_CLASS GxEPD2_420_GDEY042T81
@@ -71,22 +91,28 @@ GxIO_Class io(SPI, CS, DC, DISP_RST);
 GxEPD_Class display(io, DISP_RST, BUSY);
 #endif
 
-#include "config.h"
+#include <Wire.h>
 #include <WiFi.h>
 #include <esp_task_wdt.h>
 #include <PubSubClient.h>
+#ifdef RECEIVER_BME280
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
+#endif
 #ifdef DEV_HELTEC_RECEIVER
-#include <Wire.h>
 #include <U8g2lib.h>
 #endif
 
-String rssi = "RSSI --";
-String packSize = "--";
-String packet;
 byte packetBinary[512];
-
-float rssi_wifi;
 float rssi_lora;
+
+#ifdef RECEIVER_BME280
+Adafruit_BME280 receiverBME;
+float receiverTempC    = 0.0;
+float receiverHumidity = 0.0;
+float receiverPressureHPa = 0.0;
+bool  receiverBMEok    = false;
+#endif
 
 #ifdef DEV_HELTEC_RECEIVER
 U8G2_SSD1306_128X64_NONAME_F_SW_I2C led(U8G2_R0, /* clock=*/15, /* data=*/4, /* reset=*/16);
@@ -95,7 +121,7 @@ U8G2_SSD1306_128X64_NONAME_F_SW_I2C led(U8G2_R0, /* clock=*/15, /* data=*/4, /* 
 //===========================================
 // Weather-environment structure
 //===========================================
-struct sensorData {
+struct __attribute__((packed)) sensorData {
   int deviceID;
   int windDirectionADC;
   int rainTicks24h;
@@ -109,7 +135,7 @@ struct sensorData {
   float lux;
 };
 
-struct diagnostics {
+struct __attribute__((packed)) diagnostics {
   int deviceID;
   float BMEtemperature;
   int batteryADC;
@@ -143,15 +169,10 @@ void LoRaData() {
 // cbk: retreive contents of the received packet
 //===========================================
 void cbk(int packetSize) {
-  //struct sensorData environment;
-  packet = "";
-  packSize = String(packetSize, DEC);
   for (int i = 0; i < packetSize; i++) {
     packetBinary[i] = (char)LoRa.read();
   }
-  //LoRa.receive
   rssi_lora = LoRa.packetRssi();
-  rssi = "RSSI " + String(rssi_lora, DEC);
   if (packetSize == sizeof(environment)) {
     memcpy(&environment, &packetBinary, packetSize);
   } else if (packetSize == sizeof(hardware)) {
@@ -166,8 +187,15 @@ void cbk(int packetSize) {
 void setup() {
   Serial.begin(115200);
 
-  //Enable WDT for any lock-up events
-  esp_task_wdt_init(WDT_TIMEOUT, true);
+  // In ESP32 Arduino 3.x.x the framework initializes TWDT before setup() runs,
+  // so reconfigure it (not reinitialize) then subscribe the main task.
+  esp_task_wdt_config_t wdt_config = {
+      .timeout_ms = WDT_TIMEOUT * 1000,
+      .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
+      .trigger_panic = true
+  };
+
+  esp_task_wdt_reconfigure(&wdt_config);
   esp_task_wdt_add(NULL);
 
 #ifdef DEV_HELTEC_RECEIVER
@@ -197,6 +225,16 @@ void setup() {
   LoRa.enableCrc();
   LoRa.setSyncWord(SYNC);
   Serial.printf("LoRa receiver is online\n");
+
+#ifdef RECEIVER_BME280
+  Wire.begin(BME280_SDA, BME280_SCL);
+  receiverBMEok = receiverBME.begin(BME280_ADDR, &Wire);
+  if (receiverBMEok) {
+    Serial.printf("Receiver BME280 online (0x%02X)\n", BME280_ADDR);
+  } else {
+    Serial.printf("Receiver BME280 not found at 0x%02X - check wiring and SDO pin\n", BME280_ADDR);
+  }
+#endif
 
 #ifdef E_PAPER
   // Initialize the display
@@ -252,36 +290,40 @@ void loop() {
 #endif
   }
   delay(10);
-  if (firstUpdate | millis() % 10000 < 5) {
+  if (firstUpdate || millis() % 10000 < 5) {
     MonPrintf(".");
     upTimeSeconds = millis() / 60000;
+
+#ifdef RECEIVER_BME280
+    if (receiverBMEok) {
+      receiverTempC         = receiverBME.readTemperature();
+      receiverHumidity      = receiverBME.readHumidity();
+      receiverPressureHPa   = receiverBME.readPressure() / 100.0;
+      SendReceiverBME280MQTT();
+    }
+#endif
 
 #ifdef E_PAPER
   #ifdef WAVESHARE_R22
     // GxEPD2 - Required for Waveshare 4.2" Rev. 2.2
     if (firstUpdate || millis() % 60000 < 500) {
-        // Start the display update
         display.firstPage();
         do {
-            // Clear the screen
             display.fillScreen(GxEPD_WHITE);
-
-            // Call functions to draw your content
-            // eUpdate(count, Hcount, Scount, Xcount, upTimeSeconds);
             eSensors();
             eHardware();
-        } while (display.nextPage()); // Continue to the next part of the display update
-
-        // Ensure `firstUpdate` is set to false after the initial update
+            esp_task_wdt_reset(); // e-paper full refresh can exceed 15s; reset WDT each page
+        } while (display.nextPage());
         firstUpdate = false;
-    }    
+    }
   #else
     // GxEPD
-    if (firstUpdate | millis() % 60000 < 500) {
+    if (firstUpdate || millis() % 60000 < 500) {
       display.fillScreen(GxEPD_WHITE);
       eUpdate(count, Hcount, Scount, Xcount, upTimeSeconds);
       eSensors();
       eHardware();
+      esp_task_wdt_reset();
       display.update();
     }
   #endif  
@@ -339,7 +381,7 @@ void MonPrintf(const char* format, ...) {
   char buffer[200];
   va_list args;
   va_start(args, format);
-  vsprintf(buffer, format, args);
+  vsnprintf(buffer, sizeof(buffer), format, args);
   va_end(args);
 #ifdef SerialMonitor
   Serial.printf("%s", buffer);
@@ -349,14 +391,11 @@ void MonPrintf(const char* format, ...) {
 #ifdef WAVESHARE_R22
 // GxEPD2
 void eTitle() {
-  // Start the display update
   display.firstPage();
   do {
-    // Set the text size and cursor position
     display.setTextSize(2);
     display.setCursor(20, 20);
-    display.print(" Weather Station V4.0 ");
-
+    display.print(" Weather Station v4.0 ");
     display.setCursor(60, 180);
     display.print("Debasish Dutta");
     display.setCursor(60, 210);
@@ -364,7 +403,8 @@ void eTitle() {
     display.setCursor(60, 230);
     display.print("Ver: ");
     display.println(VERSION);
-  } while (display.nextPage()); // Complete the display update
+    esp_task_wdt_reset();
+  } while (display.nextPage());
 }
 #else
 // GxEPD
@@ -464,7 +504,7 @@ void eSensors(void) {
   // display.print(environment.windDirectionADC);
   display.print(wind.cardinalDirection);
   
-    y += yOffset;
+  y += yOffset;
   display.setCursor(xS, y);
   display.print(" Speed:");
   // display.print(environment.windSpeedMax);
@@ -501,42 +541,96 @@ void eHardware(void) {
   display.setTextSize(2);
   display.drawRect(0, 0, 200, 280, GxEPD_BLACK);
   display.setCursor(xS, yS);
-  display.print("Hardware:");
-  y += yOffset;
-  display.setCursor(xS, y);
-  display.print("Solar:");
-  display.print(hardware.solarADC);
+  display.print("Station:");
+
+  // y += yOffset;
+  // display.setCursor(xS, y);
+  // display.print("Solar:");
+  // display.print(hardware.solarADC);
 
   y += yOffset;
   display.setCursor(xS, y);
-  display.print("Solar V:");
+  display.print(" Solar:");
   float vSolar = (float)hardware.solarADC / ADCSolar;
   display.print(vSolar);
+  display.print("v");
+
+  // y += yOffset;
+  // display.setCursor(xS, y);
+  // display.print("Battery:");
+  // display.print(hardware.batteryADC);
 
   y += yOffset;
   display.setCursor(xS, y);
-  display.print("Battery:");
-  display.print(hardware.batteryADC);
-
-  y += yOffset;
-  display.setCursor(xS, y);
-  display.print("Battery V:");
+  display.print(" Battery:");
   float vBat = (float)hardware.batteryADC / ADCBattery;
   display.print(vBat);
+  display.print("v");
 
   y += yOffset;
 #ifdef IMPERIAL // Display in US
   // Display temperature in Fahrenheit
   float bmetempF = (hardware.BMEtemperature * 9.0 / 5.0) + 32;
   display.setCursor(xS, y);
-  display.print("BME Temp:");
+  display.print(" Temp:");
   display.print(bmetempF);
-    display.print("F");
+  display.print("F");
 #else // display in Metric
   display.setCursor(xS, y);
-  display.print("BME Temp:");
+  display.print(" Temp:");
   display.print(hardware.BMEtemperature);
-    display.print("C");
+  display.print("C");
 #endif
+
+  y += yOffset;
+  display.setCursor(xS, y);
+  display.print("");
+
+  y += yOffset;
+  display.setTextSize(2);
+  display.drawRect(0, 0, 200, 280, GxEPD_BLACK);
+  display.setCursor(xS, y);
+  display.print("Receiver:");
+
+  y += yOffset;
+  display.setCursor(xS, y);
+  display.print(" Battery:");
+  int rawADC = analogRead(BATTERY_PIN);
+  float voltage = (rawADC / ADC_MAX) * VOLTAGE_REF;
+  float batteryVoltage = voltage / (R2 / (R1 + R2)); // Reverse voltage divider formula
+  // float vBat = (float)hardware.batteryADC / ADCBattery;
+  display.print(batteryVoltage);
+  display.print("v");
+
+  y += yOffset;
+  display.setCursor(xS, y);
+#ifdef RECEIVER_BME280
+  if (receiverBMEok) {
+    #ifdef IMPERIAL
+      display.print(" Temp:");
+      display.print((receiverTempC * 9.0 / 5.0) + 32.0, 1);
+      display.print("F");
+    #else
+      display.print(" Temp:");
+      display.print(receiverTempC, 1);
+      display.print("C");
+    #endif
+  } else {
+    display.print(" Temp:N/A");
+  }
+#else
+  display.print(" Temp:--");
+#endif
+
+//   y += yOffset;
+//   display.setCursor(xS, y);
+// #ifdef RECEIVER_BME280
+//   if (receiverBMEok) {
+//     display.print(" Rel Hum:");
+//     display.print(receiverHumidity);
+//     display.print("%");
+// #else
+//   display.print(" Hum:--%");
+// #endif
 
 }

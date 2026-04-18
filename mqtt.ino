@@ -117,8 +117,7 @@ void MQTTPublish(const char topic[], const char *value, bool retain) {
   char topicBuffer[256];
   char payload[256];
 
-  strcpy(topicBuffer, mainTopic);
-  strcat(topicBuffer, topic);
+  snprintf(topicBuffer, sizeof(topicBuffer), "%s%s", mainTopic, topic);
   if (!client.connected() && !reconnect()) return;
   client.loop();
   snprintf(payload, sizeof(payload), "%s", value);
@@ -132,8 +131,7 @@ void MQTTPublish(const char topic[], int value, bool retain) {
   char topicBuffer[256];
   char payload[256];
 
-  strcpy(topicBuffer, mainTopic);
-  strcat(topicBuffer, topic);
+  snprintf(topicBuffer, sizeof(topicBuffer), "%s%s", mainTopic, topic);
   if (!client.connected() && !reconnect()) return;
   client.loop();
   snprintf(payload, sizeof(payload), "%i", value);
@@ -148,8 +146,7 @@ void MQTTPublish(const char topic[], long value, bool retain) {
   char topicBuffer[256];
   char payload[256];
 
-  strcpy(topicBuffer, mainTopic);
-  strcat(topicBuffer, topic);
+  snprintf(topicBuffer, sizeof(topicBuffer), "%s%s", mainTopic, topic);
   if (!client.connected() && !reconnect()) return;
   client.loop();
   snprintf(payload, sizeof(payload), "%li", value);
@@ -163,8 +160,7 @@ void MQTTPublish(const char topic[], float value, bool retain) {
   char topicBuffer[256];
   char payload[256];
 
-  strcpy(topicBuffer, mainTopic);
-  strcat(topicBuffer, topic);
+  snprintf(topicBuffer, sizeof(topicBuffer), "%s%s", mainTopic, topic);
   if (!client.connected() && !reconnect()) return;
   client.loop();
   snprintf(payload, sizeof(payload), "%6.3f", value);
@@ -178,8 +174,7 @@ void MQTTPublish(const char topic[], bool value, bool retain) {
   char topicBuffer[256];
   char payload[256];
 
-  strcpy(topicBuffer, mainTopic);
-  strcat(topicBuffer, topic);
+  snprintf(topicBuffer, sizeof(topicBuffer), "%s%s", mainTopic, topic);
   if (!client.connected() && !reconnect()) return;
   client.loop();
   snprintf(payload, sizeof(payload), "%s", value ? "true" : "false");
